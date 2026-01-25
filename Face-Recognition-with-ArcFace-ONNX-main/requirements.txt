@@ -1,6 +1,11 @@
-opencv-python 
-numpy 
-onnxruntime 
-scipy 
-tqdm 
-mediapipe
+# Intelligent Face Recognition System - Dependencies
+# Author: Manene (RCA Y3 - Intelligent Robotics)
+# 
+# Core computer vision and deep learning libraries
+
+opencv-python>=4.8.0     # Computer vision operations & camera interface
+numpy>=1.24.0            # Numerical computing & array operations
+onnxruntime>=1.15.0      # ONNX model inference engine (CPU)
+scipy>=1.11.0            # Scientific computing & optimization
+tqdm>=4.65.0             # Progress bar utilities
+mediapipe>=0.10.0        # Facial landmark detection

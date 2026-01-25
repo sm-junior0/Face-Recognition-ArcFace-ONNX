@@ -2,30 +2,36 @@
 """
 enroll.py
 Enrollment tool using your working pipeline:
+
 camera -> Haar detection -> FaceMesh 5pt -> align_face_5pt (112x112) -> ArcFace embedding
 Stores template per identity (mean embedding, L2-normalized).
+
 Re-enroll behavior:
 - If data/enroll/<name> already contains aligned crops, those are loaded,
   embedded again, and INCLUDED in the template. New captures are appended.
+
 Outputs:
-- data/db/face_db.npz (name -> embedding vector)
-- data/db/face_db.json (metadata)
+- data/db/face_db.npz    (name -> embedding vector)
+- data/db/face_db.json   (metadata)
+
 Optional:
 - data/enroll/<name>/*.jpg aligned face crops
+
 Controls:
 - SPACE: capture one sample (if face found)
-- a: auto-capture toggle (captures periodically)
-- s: save enrollment (after enough total samples)
-- r: reset NEW samples (keeps existing crops on disk)
-- q: quit
+  a: auto-capture toggle (captures periodically)
+  s: save enrollment (after enough total samples)
+  r: reset NEW samples (keeps existing crops on disk)
+  q: quit
 """
+
 from __future__ import annotations
 
 import json
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
@@ -33,16 +39,18 @@ import numpy as np
 from .haar_5pt import Haar5ptDetector, align_face_5pt
 from .embed import ArcFaceEmbedderONNX
 
-# -------------------------
+# ----------------------------------
 # Config
-# -------------------------
+# ----------------------------------
 
 @dataclass
 class EnrollConfig:
     out_db_npz: Path = Path("data/db/face_db.npz")
     out_db_json: Path = Path("data/db/face_db.json")
+
     save_crops: bool = True
     crops_dir: Path = Path("data/enroll")
+
     samples_needed: int = 15
     auto_capture_every_s: float = 0.25
     max_existing_crops: int = 300
@@ -51,9 +59,9 @@ class EnrollConfig:
     window_main: str = "enroll"
     window_aligned: str = "aligned_112"
 
-# -------------------------
+# ----------------------------------
 # DB helpers
-# -------------------------
+# ----------------------------------
 
 def ensure_dirs(cfg: EnrollConfig) -> None:
     cfg.out_db_npz.parent.mkdir(parents=True, exist_ok=True)
@@ -79,14 +87,13 @@ def mean_embedding(embeddings: List[np.ndarray]) -> np.ndarray:
     m = m / (np.linalg.norm(m) + 1e-12)
     return m.astype(np.float32)
 
-# -------------------------
+# ----------------------------------
 # Crops loader
-# -------------------------
+# ----------------------------------
 
-def _list_existing_crops(person_dir: Path, max_count: int) -> List[Path]:
+def list_existing_crops(person_dir: Path, max_count: int) -> List[Path]:
     if not person_dir.exists():
         return []
-
     files = sorted([p for p in person_dir.glob("*.jpg") if p.is_file()])
     if len(files) > max_count:
         files = files[-max_count:]
@@ -103,7 +110,7 @@ def load_existing_samples_from_crops(
     if not cfg.save_crops:
         return []
 
-    crops = _list_existing_crops(person_dir, cfg.max_existing_crops)
+    crops = list_existing_crops(person_dir, cfg.max_existing_crops)
     base: List[np.ndarray] = []
 
     for p in crops:
@@ -118,9 +125,9 @@ def load_existing_samples_from_crops(
 
     return base
 
-# -------------------------
+# ----------------------------------
 # UI helpers
-# -------------------------
+# ----------------------------------
 
 def draw_status(
     frame: np.ndarray,
@@ -138,37 +145,19 @@ def draw_status(
         f"Auto: {'ON' if auto else 'OFF'} (toggle: a)",
         "SPACE=capture | s=save | r=reset NEW | q=quit",
     ]
-
     if msg:
         lines.insert(0, msg)
 
+    # draw with black shadow for readability
     y = 30
     for line in lines:
-        cv2.putText(
-            frame,
-            line,
-            (10, y),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.62,
-            (0, 0, 0),
-            4,
-            cv2.LINE_AA,
-        )
-        cv2.putText(
-            frame,
-            line,
-            (10, y),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.62,
-            (255, 255, 255),
-            2,
-            cv2.LINE_AA,
-        )
+        cv2.putText(frame, line, (10, y), cv2.FONT_HERSHEY_SIMPLEX, 0.62, (0, 0, 0), 4, cv2.LINE_AA)
+        cv2.putText(frame, line, (10, y), cv2.FONT_HERSHEY_SIMPLEX, 0.62, (255, 255, 255), 2, cv2.LINE_AA)
         y += 26
 
-# -------------------------
+# ----------------------------------
 # Main
-# -------------------------
+# ----------------------------------
 
 def main():
     cfg = EnrollConfig()
@@ -179,12 +168,9 @@ def main():
         print("No name provided. Exiting.")
         return
 
+    # Pipeline (your working practical stack)
     det = Haar5ptDetector(min_size=(70, 70), smooth_alpha=0.80, debug=False)
-    emb = ArcFaceEmbedderONNX(
-        model_path="models/embedder_arcface.onnx",
-        input_size=(112, 112),
-        debug=False,
-    )
+    emb = ArcFaceEmbedderONNX(model_path="models/embedder_arcface.onnx", input_size=(112, 112), debug=False)
 
     db = load_db(cfg)
 
@@ -192,9 +178,7 @@ def main():
     if cfg.save_crops:
         person_dir.mkdir(parents=True, exist_ok=True)
 
-    base_samples: List[np.ndarray] = load_existing_samples_from_crops(
-        cfg, emb, person_dir
-    )
+    base_samples: List[np.ndarray] = load_existing_samples_from_crops(cfg, emb, person_dir)
     new_samples: List[np.ndarray] = []
 
     status_msg = ""
@@ -215,7 +199,6 @@ def main():
     print("\nEnrollment started.")
     if base_samples:
         print(f"Re-enroll mode: found {len(base_samples)} existing samples in {person_dir}/")
-
     print("Tip: stable lighting, move slightly left/right, different expressions.")
     print("Controls: SPACE=capture, a=auto, s=save, r=reset NEW, q=quit\n")
 
@@ -231,11 +214,13 @@ def main():
 
             vis = frame.copy()
             faces = det.detect(frame, max_faces=1)
+
             aligned: Optional[np.ndarray] = None
 
             if faces:
                 f = faces[0]
 
+                # draw hbox + kps
                 cv2.rectangle(vis, (f.x1, f.y1), (f.x2, f.y2), (0, 255, 0), 2)
                 for (x, y) in f.kps.astype(int):
                     cv2.circle(vis, (int(x), int(y)), 3, (0, 255, 0), -1)
@@ -243,10 +228,7 @@ def main():
                 aligned, _ = align_face_5pt(frame, f.kps, out_size=(112, 112))
                 cv2.imshow(cfg.window_aligned, aligned)
             else:
-                cv2.imshow(
-                    cfg.window_aligned,
-                    np.zeros((112, 112, 3), dtype=np.uint8),
-                )
+                cv2.imshow(cfg.window_aligned, np.zeros((112, 112, 3), dtype=np.uint8))
 
             # auto capture
             now = time.time()
@@ -269,16 +251,8 @@ def main():
                 t0 = time.time()
 
             if fps is not None:
-                cv2.putText(
-                    vis,
-                    f"FPS: {fps:.1f}",
-                    (10, vis.shape[0] - 12),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.7,
-                    (0, 255, 0),
-                    2,
-                    cv2.LINE_AA,
-                )
+                cv2.putText(vis, f"FPS: {fps:.1f}", (10, vis.shape[0] - 12),
+                          cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2, cv2.LINE_AA)
 
             draw_status(
                 vis,
@@ -291,8 +265,8 @@ def main():
             )
 
             cv2.imshow(cfg.window_main, vis)
-
             key = cv2.waitKey(1) & 0xFF
+
             if key == ord("q"):
                 break
 
@@ -304,19 +278,19 @@ def main():
                 new_samples.clear()
                 status_msg = "NEW samples reset (existing kept)."
 
-            if key == ord(" "):  # SPACE
+            if key == ord(' '):  # SPACE
                 if aligned is None:
                     status_msg = "No face detected. Not captured."
                 else:
                     r = emb.embed(aligned)
                     new_samples.append(r.embedding)
-                    status_msg = f"Captured NEW ({len(new_samples)})"
+                    status_msg = f"Captured NEW {len(new_samples)}"
 
                     if cfg.save_crops:
                         fn = person_dir / f"{int(time.time() * 1000)}.jpg"
                         cv2.imwrite(str(fn), aligned)
 
-            if key == ord("s"):
+            if key == ord('s'):
                 total = len(base_samples) + len(new_samples)
                 if total < max(3, cfg.samples_needed // 2):
                     status_msg = f"Not enough total samples to save (have {total})."
@@ -337,9 +311,11 @@ def main():
                 }
 
                 save_db(cfg, db, meta)
+
                 status_msg = f"Saved '{name}' to DB. Total identities: {len(db)}"
                 print(status_msg)
 
+                # reload base from disk so UI matches reality
                 base_samples = load_existing_samples_from_crops(cfg, emb, person_dir)
                 new_samples.clear()
 
