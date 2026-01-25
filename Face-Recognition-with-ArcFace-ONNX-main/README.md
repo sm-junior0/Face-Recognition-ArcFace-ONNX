@@ -45,6 +45,7 @@ face_recognition_arcface_onnx/
 │   ├── landmarks.py          # MediaPipe FaceMesh helper
 │   └── recognize.py          # Recognition application main entry
 └── requirements.txt          # Python package dependencies
+
 ```
 
 ## Installation
@@ -59,6 +60,7 @@ Execute the initialization script to create required data folders and default fi
 
 ```bash
 python init_project.py
+
 ```
 
 ### 3. Install Dependencies
@@ -67,6 +69,7 @@ A virtual environment is strongly recommended.
 
 ```bash
 pip install opencv-python numpy onnxruntime mediapipe
+
 ```
 
 ### 4. Model Setup
@@ -83,6 +86,7 @@ Add new faces to the recognition database.
 
 ```bash
 python -m src.enroll
+
 ```
 
 **Controls:**
@@ -101,6 +105,7 @@ Launch the recognition system using your webcam feed.
 
 ```bash
 python -m src.recognize
+
 ```
 
 **Controls:**
@@ -119,6 +124,7 @@ Test the system's performance on a validation dataset.
 
 ```bash
 python -m src.evaluate
+
 ```
 
 ## Technical Details
@@ -126,8 +132,9 @@ python -m src.evaluate
 * **Input Resolution**: 112x112 pixels (RGB format).
 * **Output Vector**: 512-dimensional float embedding.
 * **Distance Metric**: Cosine Distance.
-  * *Values near 1.0* = More similar.
-  * *Values near 0.0* = Less similar.
+* *Values near 1.0* = More similar.
+* *Values near 0.0* = Less similar.
+
 
 * **Storage**: The face database is saved to `data/db/face_db.npz`. This enables quick read/write operations using NumPy's compressed binary format.
 
